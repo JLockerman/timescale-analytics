@@ -29,11 +29,12 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 20
 
+    - name: Test 13
+      run: cargo pgx test 13
+
     - name: Test 12
       run: |
         chown -R postgres ./
         su postgres
+        echo ~
         cargo pgx test 12
-
-    - name: Test 13
-      run: cargo pgx test 13
