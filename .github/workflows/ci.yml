@@ -30,4 +30,4 @@ jobs:
         fetch-depth: 20
 
     - name: Test 12
-      run: HOME=/home/postgres cargo pgx test 12
+      run: HOME=/home/postgres cargo pgx test pg12
