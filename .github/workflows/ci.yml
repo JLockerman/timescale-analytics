@@ -19,6 +19,7 @@ jobs:
         CI: 1
         RUST_BACKTRACE: short
         RUSTUP_MAX_RETRIES: 10
+        GITHUB_WORKSPACE: /home/postgres
 
     steps:
     - name: Checkout repository
