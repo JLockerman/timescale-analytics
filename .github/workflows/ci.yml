@@ -11,8 +11,19 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
+    container:
+      image: timescaledev/rust-pgx:latest
+      env:
+        CARGO_INCREMENTAL: 0
+        CARGO_NET_RETRY: 10
+        CI: 1
+        RUST_BACKTRACE: short
+        RUSTUP_MAX_RETRIES: 10
 
     steps:
+    - name: Grant Permissions
+      run: sudo chmod -R +w /
+
     - name: Checkout repository
       uses: actions/checkout@v2
       with:
@@ -20,23 +31,7 @@ jobs:
         fetch-depth: 20
 
     - name: Test 12
-      container:
-        image: timescaledev/rust-pgx:latest
-        env:
-          CARGO_INCREMENTAL: 0
-          CARGO_NET_RETRY: 10
-          CI: 1
-          RUST_BACKTRACE: short
-          RUSTUP_MAX_RETRIES: 10
       run: cargo pgx test 12
 
     - name: Test 13
-      container:
-        image: timescaledev/rust-pgx:latest
-        env:
-          CARGO_INCREMENTAL: 0
-          CARGO_NET_RETRY: 10
-          CI: 1
-          RUST_BACKTRACE: short
-          RUSTUP_MAX_RETRIES: 10
       run: cargo pgx test 13
