@@ -23,11 +23,6 @@ jobs:
       options: -u root
 
     steps:
-    - name: Grant Permissions
-      run: |
-        su
-        chmod -R +rw /
-
     - name: Checkout repository
       uses: actions/checkout@v2
       with:
@@ -35,7 +30,10 @@ jobs:
         fetch-depth: 20
 
     - name: Test 12
-      run: cargo pgx test 12
+      run: |
+        chown -R postgres ./
+        su postgres
+        cargo pgx test 12
 
     - name: Test 13
       run: cargo pgx test 13
