@@ -20,7 +20,6 @@ jobs:
         RUST_BACKTRACE: short
         RUSTUP_MAX_RETRIES: 10
         HOME: /home/postgres
-      options: -u root
 
     steps:
     - name: Checkout repository
