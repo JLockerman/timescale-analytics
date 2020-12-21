@@ -22,7 +22,9 @@ jobs:
 
     steps:
     - name: Grant Permissions
-      run: sudo chmod -R +w /
+      run: |
+        su
+        chmod -R +rw /
 
     - name: Checkout repository
       uses: actions/checkout@v2
