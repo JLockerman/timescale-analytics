@@ -19,17 +19,16 @@ jobs:
         CI: 1
         RUST_BACKTRACE: short
         RUSTUP_MAX_RETRIES: 10
-      options: -u postgres
 
     steps:
-    - name: Checkout repository
+    - name: Checkout Repository
       uses: actions/checkout@v2
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 20
 
-    - name: Start Postgres
-      run: sudo -HEsu postgres sh -c "/usr/local/cargo/bin/cargo pgx start pg12"
+    - name: chown Repository
+      run: chown -R postgres .
 
     - name: Run Tests
-      run: HOME=/home/postgres cargo pgx test pg12
+      run:  sudo -HEsu postgres sh -c "/usr/local/cargo/bin/cargo test pg12"
