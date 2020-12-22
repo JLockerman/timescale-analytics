@@ -22,6 +22,9 @@ jobs:
       options: -u root
 
     steps:
+    - name: Add sudo
+      run: apt-get install sudo -y
+
     - name: Checkout repository
       uses: actions/checkout@v2
       with:
@@ -29,9 +32,7 @@ jobs:
         fetch-depth: 20
 
     - name: Start Postgres
-      run: |
-        su postgres
-        HOME=/home/postgres cargo pgx start pg12
+      run: sudo -u postgres -H /bin/bash "cargo pgx start pg12"
 
     - name: Run Tests
       run: HOME=/home/postgres cargo pgx test pg12
