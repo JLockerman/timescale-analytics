@@ -9,7 +9,7 @@ on:
 
 jobs:
   test:
-    name: test
+    name: Test PG 12
     runs-on: ubuntu-latest
     container:
       image: timescaledev/rust-pgx:latest
@@ -19,7 +19,7 @@ jobs:
         CI: 1
         RUST_BACKTRACE: short
         RUSTUP_MAX_RETRIES: 10
-        HOME: /home/postgres
+      options: -u root
 
     steps:
     - name: Checkout repository
@@ -28,5 +28,10 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 20
 
-    - name: Test 12
+    - name: Start Postgres
+      run: |
+        su - postgres
+        cargo pgx start pg12
+
+    - name: Run Tests
       run: HOME=/home/postgres cargo pgx test pg12
