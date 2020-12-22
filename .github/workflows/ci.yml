@@ -29,7 +29,7 @@ jobs:
         fetch-depth: 20
 
     - name: Start Postgres
-      run: sudo -u postgres -H /bin/bash "cargo pgx start pg12"
+      run: sudo -u postgres -H sh -c "cargo pgx start pg12"
 
     - name: Run Tests
       run: HOME=/home/postgres cargo pgx test pg12
