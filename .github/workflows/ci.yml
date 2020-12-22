@@ -22,9 +22,6 @@ jobs:
       options: -u root
 
     steps:
-    - name: Add sudo
-      run: apt-get install sudo -y
-
     - name: Checkout repository
       uses: actions/checkout@v2
       with:
