@@ -30,7 +30,7 @@ jobs:
 
     - name: Start Postgres
       run: |
-        su - postgres
+        su -l postgres
         cargo pgx start pg12
 
     - name: Run Tests
