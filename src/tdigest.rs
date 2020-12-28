@@ -13,8 +13,12 @@ use pg_sys::Datum;
 
 use flat_serialize::*;
 
-use crate::palloc::{Internal, in_memory_context};
-use crate::aggregate_utils::{aggregate_mctx, in_aggregate_context};
+use crate::{
+    aggregate_utils::{aggregate_mctx, in_aggregate_context},
+    debug_inout_funcs,
+    flatten,
+    palloc::{Internal, in_memory_context}, pg_type
+};
 
 use tdigest::{
     TDigest,
@@ -153,11 +157,12 @@ pub fn tdigest_deserialize(
     tdigest.into()
 }
 
-flat_serialize_macro::flat_serialize! {
-    struct TsTDigestData {
-        header: u32,
+pg_type! {
+    #[derive(Debug)]
+    struct TimescaleTDigest {
         buckets: u32,
         count: u32,
+        padding: [u8; 4],
         sum: f64,
         min: f64,
         max: f64,
@@ -166,90 +171,18 @@ flat_serialize_macro::flat_serialize! {
     }
 }
 
-#[derive(PostgresType, Copy, Clone)]
-#[inoutfuncs]
-pub struct TimescaleTDigest<'input>(TsTDigestData<'input>);
+debug_inout_funcs!(TimescaleTDigest);
 
 impl<'input> TimescaleTDigest<'input> {
     fn to_tdigest(&self) -> TDigest {
-        let size = min(*self.0.buckets, *self.0.count) as usize;
+        let size = min(*self.buckets, *self.count) as usize;
         let mut cents: Vec<Centroid> = Vec::new();
 
         for i in 0..size {
-            cents.push(Centroid::new(self.0.means[i], self.0.weights[i] as f64));
+            cents.push(Centroid::new(self.means[i], self.weights[i] as f64));
         }
 
-        TDigest::new(cents, *self.0.sum, *self.0.count as f64, *self.0.max, *self.0.min, *self.0.buckets as usize)
-    }
-}
-
-impl<'input> InOutFuncs for TimescaleTDigest<'input> {
-    fn output(&self, buffer: &mut StringInfo) {
-        use std::io::Write;
-        // for output we'll just write the debug format of the data
-        // if we decide to go this route we'll probably automate this process
-        //let _ = write!(buffer, "{:?}", self.0.data);
-        let _ = write!(buffer, "TODO, this");
-    }
-
-    fn input(_input: &std::ffi::CStr) -> Self
-    where
-        Self: Sized,
-    {
-        unimplemented!("we don't bother implementing string input")
-    }
-}
-
-impl<'input> FromDatum for TimescaleTDigest<'input> {
-    unsafe fn from_datum(datum: Datum, is_null: bool, _: pg_sys::Oid) -> Option<Self>
-    where
-        Self: Sized,
-    {
-        if is_null {
-            return None;
-        }
-
-        let ptr = pg_sys::pg_detoast_datum_packed(datum as *mut pg_sys::varlena);
-        let data_len = varsize_any(ptr);
-        let bytes = slice::from_raw_parts(ptr as *mut u8, data_len);
-
-        let (data, _) = match TsTDigestData::try_ref(bytes) {
-            Ok(wrapped) => wrapped,
-            Err(e) => error!("invalid TimescaleTDigest {:?} - {},", e, bytes.len()),
-        };
-
-        TimescaleTDigest(data).into()
-    }
-}
-
-impl<'input> IntoDatum for TimescaleTDigest<'input> {
-    fn into_datum(self) -> Option<Datum> {
-        // to convert to a datum just get a pointer to the start of the buffer
-        // _technically_ this is only safe if we're sure that the data is laid
-        // out contiguously, which we have no way to guarantee except by
-        // allocation a new buffer, or storing some additional metadata.
-        Some(self.0.header as *const u32 as Datum)
-    }
-
-    fn type_oid() -> pg_sys::Oid {
-        rust_regtypein::<Self>()
-    }
-}
-
-macro_rules! flatten {
-    ($typ:ident { $($field:ident: $value:expr),* $(,)? }) => {
-        {
-            let data = $typ {
-                $(
-                    $field: $value
-                ),*
-            };
-            let mut output = vec![];
-            data.fill_vec(&mut output);
-            set_varsize(output.as_mut_ptr() as *mut _, output.len() as i32);
-
-            $typ::try_ref(output.leak()).unwrap().0
-        }
+        TDigest::new(cents, *self.sum, *self.count as f64, *self.max, *self.0.min, *self.buckets as usize)
     }
 }
 
@@ -279,20 +212,18 @@ fn tdigest_final(
 
             // we need to flatten the vector to a single buffer that contains
             // both the size, the data, and the varlen header
-            let flattened = flatten! {
-                TsTDigestData{
-                    header: &0,
+            flatten!(
+                TimescaleTDigest {
                     buckets: &buckets,
                     count: &count,
                     sum: &state.digested.sum(),
                     min: &state.digested.min(),
                     max: &state.digested.max(),
+                    padding: &Default::default(),
                     means: &means,
                     weights: &weights,
                 }
-            };
-
-            TimescaleTDigest(flattened).into()
+            ).into()
         })
     }
 }
@@ -320,7 +251,7 @@ pub fn tdigest_count(
     digest: TimescaleTDigest,
     _fcinfo: pg_sys::FunctionCallInfo,
 ) -> f64 {
-    *digest.0.count as f64
+    *digest.count as f64
 }
 
 #[pg_extern]
@@ -328,7 +259,7 @@ pub fn tdigest_min(
     digest: TimescaleTDigest,
     _fcinfo: pg_sys::FunctionCallInfo,
 ) -> f64 {
-    *digest.0.min
+    *digest.min
 }
 
 #[pg_extern]
@@ -336,7 +267,7 @@ pub fn tdigest_max(
     digest: TimescaleTDigest,
     _fcinfo: pg_sys::FunctionCallInfo,
 ) -> f64 {
-    *digest.0.max
+    *digest.max
 }
 
 #[pg_extern]
@@ -344,8 +275,8 @@ pub fn tdigest_mean(
     digest: TimescaleTDigest,
     _fcinfo: pg_sys::FunctionCallInfo,
 ) -> f64 {
-    if *digest.0.count > 0 {
-        *digest.0.sum / *digest.0.count as f64
+    if *digest.count > 0 {
+        *digest.sum / *digest.count as f64
     } else {
         0.0
     }
@@ -356,7 +287,7 @@ pub fn tdigest_sum(
     digest: TimescaleTDigest,
     _fcinfo: pg_sys::FunctionCallInfo,
 ) -> f64 {
-    *digest.0.sum
+    *digest.sum
 }
 
 #[cfg(any(test, feature = "pg_test"))]
@@ -366,7 +297,7 @@ mod tests {
     fn apx_eql(value: f64, expected: f64, error: f64) {
         assert!((value - expected).abs() < error, "Float value {} differs from expected {} by more than {}", value, expected, error);
     }
-    
+
     fn pct_eql(value: f64, expected: f64, pct_error: f64) {
         apx_eql(value, expected, pct_error * expected);
     }
@@ -409,7 +340,7 @@ mod tests {
                     .select(&format!("SELECT tdigest_quantile(t_digest, {}), tdigest_quantile_at_value(t_digest, {}) FROM digest", quantile, value), None, None)
                     .first()
                     .get_two::<f64, f64>();
-                
+
                 if i == 0 {
                     pct_eql(est_val.unwrap(), 0.01, 1.0);
                     apx_eql(est_quant.unwrap(), quantile, 0.0001);
